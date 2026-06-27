@@ -4,6 +4,8 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 
+const AUTH_URL = "https://functions.poehali.dev/3a7597af-1b8b-4bb0-becc-e8e7b31ec472";
+
 const STATS = [
   { num: '120+', label: 'специалистов в команде' },
   { num: '8', label: 'лет на рынке' },
@@ -25,17 +27,13 @@ const GAMES = [
   { title: 'GTA VI', genre: 'Open World', price: '4 999 ₽', badge: 'Новинка', color: 'from-green-500 to-emerald-500' },
 ];
 
-// Демо-база: логины + флаг shop_enabled
-const USERS: Record<string, { password: string; shopEnabled: boolean }> = {
-  DezeYT: { password: '', shopEnabled: true },
-};
-
 type AuthUser = { username: string; shopEnabled: boolean } | null;
 
 export default function Index() {
-  const [modal, setModal] = useState<'register' | 'login' | null>(null);
+  const [modal, setModal] = useState(false);
   const [tab, setTab] = useState<'register' | 'login'>('register');
   const [user, setUser] = useState<AuthUser>(null);
+  const [loading, setLoading] = useState(false);
 
   const [regName, setRegName] = useState('');
   const [regPass, setRegPass] = useState('');
@@ -45,24 +43,51 @@ export default function Index() {
   const [loginPass, setLoginPass] = useState('');
   const [loginErr, setLoginErr] = useState('');
 
-  const openModal = () => { setModal('open'); setTab('register'); setRegErr(''); setLoginErr(''); };
-  const closeModal = () => setModal(null);
+  const openModal = () => { setModal(true); setTab('register'); setRegErr(''); setLoginErr(''); };
+  const closeModal = () => setModal(false);
 
-  const handleRegister = () => {
+  const handleRegister = async () => {
     if (!regName.trim()) return setRegErr('Введите имя');
     if (regPass.length < 4) return setRegErr('Пароль минимум 4 символа');
-    const known = USERS[regName];
-    const shopEnabled = known ? known.shopEnabled : false;
-    setUser({ username: regName, shopEnabled });
-    closeModal();
+    setLoading(true);
+    setRegErr('');
+    try {
+      const res = await fetch(AUTH_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'register', username: regName, password: regPass }),
+      });
+      const data = await res.json();
+      if (!res.ok) return setRegErr(data.error || 'Ошибка регистрации');
+      setUser({ username: data.username, shopEnabled: data.shop_enabled });
+      closeModal();
+    } catch {
+      setRegErr('Ошибка соединения. Попробуйте позже.');
+    } finally {
+      setLoading(false);
+    }
   };
 
-  const handleLogin = () => {
-    const known = USERS[loginName];
-    if (!known) return setLoginErr('Пользователь не найден');
-    // DezeYT — пароль не требуется в демо
-    setUser({ username: loginName, shopEnabled: known.shopEnabled });
-    closeModal();
+  const handleLogin = async () => {
+    if (!loginName.trim()) return setLoginErr('Введите имя');
+    if (!loginPass) return setLoginErr('Введите пароль');
+    setLoading(true);
+    setLoginErr('');
+    try {
+      const res = await fetch(AUTH_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'login', username: loginName, password: loginPass }),
+      });
+      const data = await res.json();
+      if (!res.ok) return setLoginErr(data.error || 'Ошибка входа');
+      setUser({ username: data.username, shopEnabled: data.shop_enabled });
+      closeModal();
+    } catch {
+      setLoginErr('Ошибка соединения. Попробуйте позже.');
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -113,7 +138,6 @@ export default function Index() {
               <Icon name="X" size={20} />
             </button>
 
-            {/* Табы */}
             <div className="flex rounded-xl bg-secondary/50 p-1 mb-6">
               <button
                 onClick={() => { setTab('register'); setRegErr(''); }}
@@ -138,6 +162,7 @@ export default function Index() {
                     placeholder="Александра"
                     value={regName}
                     onChange={(e) => setRegName(e.target.value)}
+                    onKeyDown={(e) => e.key === 'Enter' && handleRegister()}
                     className="h-11 bg-secondary/50 border-border rounded-xl"
                   />
                 </div>
@@ -148,13 +173,13 @@ export default function Index() {
                     placeholder="••••••••"
                     value={regPass}
                     onChange={(e) => setRegPass(e.target.value)}
+                    onKeyDown={(e) => e.key === 'Enter' && handleRegister()}
                     className="h-11 bg-secondary/50 border-border rounded-xl"
                   />
                 </div>
                 {regErr && <p className="text-sm text-destructive">{regErr}</p>}
-                <Button onClick={handleRegister} className="w-full h-12 rounded-xl bg-primary hover:bg-primary/90 font-medium">
-                  Зарегистрироваться
-                  <Icon name="Sparkles" size={16} className="ml-1.5" />
+                <Button onClick={handleRegister} disabled={loading} className="w-full h-12 rounded-xl bg-primary hover:bg-primary/90 font-medium">
+                  {loading ? <Icon name="Loader2" size={18} className="animate-spin" /> : <>Зарегистрироваться <Icon name="Sparkles" size={16} className="ml-1.5" /></>}
                 </Button>
                 <p className="text-xs text-center text-muted-foreground">
                   Уже есть аккаунт?{' '}
@@ -170,6 +195,7 @@ export default function Index() {
                     placeholder="DezeYT"
                     value={loginName}
                     onChange={(e) => setLoginName(e.target.value)}
+                    onKeyDown={(e) => e.key === 'Enter' && handleLogin()}
                     className="h-11 bg-secondary/50 border-border rounded-xl"
                   />
                 </div>
@@ -180,13 +206,13 @@ export default function Index() {
                     placeholder="••••••••"
                     value={loginPass}
                     onChange={(e) => setLoginPass(e.target.value)}
+                    onKeyDown={(e) => e.key === 'Enter' && handleLogin()}
                     className="h-11 bg-secondary/50 border-border rounded-xl"
                   />
                 </div>
                 {loginErr && <p className="text-sm text-destructive">{loginErr}</p>}
-                <Button onClick={handleLogin} className="w-full h-12 rounded-xl bg-primary hover:bg-primary/90 font-medium">
-                  Войти
-                  <Icon name="LogIn" size={16} className="ml-1.5" />
+                <Button onClick={handleLogin} disabled={loading} className="w-full h-12 rounded-xl bg-primary hover:bg-primary/90 font-medium">
+                  {loading ? <Icon name="Loader2" size={18} className="animate-spin" /> : <>Войти <Icon name="LogIn" size={16} className="ml-1.5" /></>}
                 </Button>
                 <p className="text-xs text-center text-muted-foreground">
                   Нет аккаунта?{' '}
@@ -211,7 +237,7 @@ export default function Index() {
             Sem — команда инженеров, дизайнеров и мечтателей, которые строят технологии, меняющие правила игры.
           </p>
           <div className="flex flex-wrap gap-4 justify-center animate-fade-in" style={{ animationDelay: '0.2s' }}>
-            <Button size="lg" variant="outline" className="rounded-full px-8 border-border bg-transparent hover:bg-secondary font-medium">
+            <Button size="lg" variant="outline" className="rounded-full px-8 border-border bg-transparent hover:bg-secondary font-medium" onClick={() => document.getElementById('about')?.scrollIntoView({ behavior: 'smooth' })}>
               О компании
             </Button>
           </div>
@@ -254,7 +280,7 @@ export default function Index() {
         </div>
       </section>
 
-      {/* SHOP — только для DezeYT с shop_enabled */}
+      {/* SHOP — только для аккаунтов с shop_enabled */}
       {user?.shopEnabled && (
         <section id="shop" className="container py-24">
           <div className="text-center max-w-2xl mx-auto mb-12">
@@ -289,7 +315,7 @@ export default function Index() {
         </section>
       )}
 
-      {/* JOIN / REGISTER */}
+      {/* JOIN */}
       <section id="join" className="container py-24">
         <div className="relative glass rounded-3xl overflow-hidden p-8 md:p-14 glow">
           <div className="absolute -top-24 -right-24 w-72 h-72 rounded-full bg-accent/30 blur-[100px]" />
