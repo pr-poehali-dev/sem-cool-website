@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import Icon from '@/components/ui/icon';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -17,9 +18,56 @@ const VALUES = [
   { icon: 'TrendingUp', title: 'Рост', text: 'Бюджет на обучение, менторство и реальные карьерные треки.' },
 ];
 
-const Index = () => {
+const GAMES = [
+  { title: 'Cyberpunk 2077', genre: 'RPG', price: '1 299 ₽', badge: 'Хит', color: 'from-yellow-500 to-orange-500' },
+  { title: 'Elden Ring', genre: 'Action RPG', price: '2 499 ₽', badge: 'Топ', color: 'from-purple-500 to-pink-500' },
+  { title: 'Hollow Knight', genre: 'Метроидвания', price: '399 ₽', badge: 'Инди', color: 'from-blue-500 to-cyan-500' },
+  { title: 'GTA VI', genre: 'Open World', price: '4 999 ₽', badge: 'Новинка', color: 'from-green-500 to-emerald-500' },
+];
+
+// Демо-база: логины + флаг shop_enabled
+const USERS: Record<string, { password: string; shopEnabled: boolean }> = {
+  DezeYT: { password: '', shopEnabled: true },
+};
+
+type AuthUser = { username: string; shopEnabled: boolean } | null;
+
+export default function Index() {
+  const [modal, setModal] = useState<'register' | 'login' | null>(null);
+  const [tab, setTab] = useState<'register' | 'login'>('register');
+  const [user, setUser] = useState<AuthUser>(null);
+
+  const [regName, setRegName] = useState('');
+  const [regPass, setRegPass] = useState('');
+  const [regErr, setRegErr] = useState('');
+
+  const [loginName, setLoginName] = useState('');
+  const [loginPass, setLoginPass] = useState('');
+  const [loginErr, setLoginErr] = useState('');
+
+  const openModal = () => { setModal('open'); setTab('register'); setRegErr(''); setLoginErr(''); };
+  const closeModal = () => setModal(null);
+
+  const handleRegister = () => {
+    if (!regName.trim()) return setRegErr('Введите имя');
+    if (regPass.length < 4) return setRegErr('Пароль минимум 4 символа');
+    const known = USERS[regName];
+    const shopEnabled = known ? known.shopEnabled : false;
+    setUser({ username: regName, shopEnabled });
+    closeModal();
+  };
+
+  const handleLogin = () => {
+    const known = USERS[loginName];
+    if (!known) return setLoginErr('Пользователь не найден');
+    // DezeYT — пароль не требуется в демо
+    setUser({ username: loginName, shopEnabled: known.shopEnabled });
+    closeModal();
+  };
+
   return (
     <div className="min-h-screen bg-background overflow-x-hidden grain">
+
       {/* NAV */}
       <header className="fixed top-0 inset-x-0 z-50 glass">
         <nav className="container flex items-center justify-between h-16">
@@ -28,21 +76,133 @@ const Index = () => {
           </a>
           <div className="hidden md:flex items-center gap-8 text-sm text-muted-foreground">
             <a href="#about" className="hover:text-foreground transition-colors">О компании</a>
+            {user?.shopEnabled && (
+              <a href="#shop" className="hover:text-foreground transition-colors text-accent font-medium">
+                Магазин игр
+              </a>
+            )}
             <a href="#join" className="hover:text-foreground transition-colors">Стать частью</a>
           </div>
-          <Button className="rounded-full bg-primary hover:bg-primary/90 font-medium">
-            <Icon name="LogIn" size={16} className="mr-1.5" />
-            Аккаунт
-          </Button>
+          {user ? (
+            <div className="flex items-center gap-3">
+              <span className="text-sm text-muted-foreground hidden md:block">
+                <span className="text-primary font-medium">{user.username}</span>
+              </span>
+              <Button variant="ghost" size="sm" className="rounded-full" onClick={() => setUser(null)}>
+                <Icon name="LogOut" size={16} />
+              </Button>
+            </div>
+          ) : (
+            <Button onClick={openModal} className="rounded-full bg-primary hover:bg-primary/90 font-medium">
+              <Icon name="LogIn" size={16} className="mr-1.5" />
+              Аккаунт
+            </Button>
+          )}
         </nav>
       </header>
+
+      {/* MODAL */}
+      {modal && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4" onClick={closeModal}>
+          <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" />
+          <div
+            className="relative glass rounded-2xl w-full max-w-md p-8 animate-fade-in"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <button onClick={closeModal} className="absolute top-4 right-4 text-muted-foreground hover:text-foreground">
+              <Icon name="X" size={20} />
+            </button>
+
+            {/* Табы */}
+            <div className="flex rounded-xl bg-secondary/50 p-1 mb-6">
+              <button
+                onClick={() => { setTab('register'); setRegErr(''); }}
+                className={`flex-1 py-2 rounded-lg text-sm font-medium transition-all ${tab === 'register' ? 'bg-primary text-white' : 'text-muted-foreground hover:text-foreground'}`}
+              >
+                Регистрация
+              </button>
+              <button
+                onClick={() => { setTab('login'); setLoginErr(''); }}
+                className={`flex-1 py-2 rounded-lg text-sm font-medium transition-all ${tab === 'login' ? 'bg-primary text-white' : 'text-muted-foreground hover:text-foreground'}`}
+              >
+                Вход
+              </button>
+            </div>
+
+            {tab === 'register' ? (
+              <div className="space-y-4">
+                <h3 className="font-display font-600 text-xl mb-2">Создать аккаунт</h3>
+                <div className="space-y-2">
+                  <Label>Имя пользователя</Label>
+                  <Input
+                    placeholder="Александра"
+                    value={regName}
+                    onChange={(e) => setRegName(e.target.value)}
+                    className="h-11 bg-secondary/50 border-border rounded-xl"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>Пароль</Label>
+                  <Input
+                    type="password"
+                    placeholder="••••••••"
+                    value={regPass}
+                    onChange={(e) => setRegPass(e.target.value)}
+                    className="h-11 bg-secondary/50 border-border rounded-xl"
+                  />
+                </div>
+                {regErr && <p className="text-sm text-destructive">{regErr}</p>}
+                <Button onClick={handleRegister} className="w-full h-12 rounded-xl bg-primary hover:bg-primary/90 font-medium">
+                  Зарегистрироваться
+                  <Icon name="Sparkles" size={16} className="ml-1.5" />
+                </Button>
+                <p className="text-xs text-center text-muted-foreground">
+                  Уже есть аккаунт?{' '}
+                  <button onClick={() => setTab('login')} className="text-primary hover:underline">Войти</button>
+                </p>
+              </div>
+            ) : (
+              <div className="space-y-4">
+                <h3 className="font-display font-600 text-xl mb-2">Добро пожаловать</h3>
+                <div className="space-y-2">
+                  <Label>Имя пользователя</Label>
+                  <Input
+                    placeholder="DezeYT"
+                    value={loginName}
+                    onChange={(e) => setLoginName(e.target.value)}
+                    className="h-11 bg-secondary/50 border-border rounded-xl"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>Пароль</Label>
+                  <Input
+                    type="password"
+                    placeholder="••••••••"
+                    value={loginPass}
+                    onChange={(e) => setLoginPass(e.target.value)}
+                    className="h-11 bg-secondary/50 border-border rounded-xl"
+                  />
+                </div>
+                {loginErr && <p className="text-sm text-destructive">{loginErr}</p>}
+                <Button onClick={handleLogin} className="w-full h-12 rounded-xl bg-primary hover:bg-primary/90 font-medium">
+                  Войти
+                  <Icon name="LogIn" size={16} className="ml-1.5" />
+                </Button>
+                <p className="text-xs text-center text-muted-foreground">
+                  Нет аккаунта?{' '}
+                  <button onClick={() => setTab('register')} className="text-primary hover:underline">Зарегистрироваться</button>
+                </p>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* HERO */}
       <section className="relative pt-40 pb-28">
         <div className="absolute top-20 -left-20 w-[28rem] h-[28rem] rounded-full bg-primary/30 blur-[120px] animate-float" />
         <div className="absolute top-40 right-0 w-[24rem] h-[24rem] rounded-full bg-accent/30 blur-[120px] animate-float" style={{ animationDelay: '2s' }} />
         <div className="absolute -top-10 left-1/3 w-[20rem] h-[20rem] rounded-full bg-amber-500/20 blur-[120px] animate-float" style={{ animationDelay: '4s' }} />
-
         <div className="container relative text-center max-w-4xl">
           <h1 className="font-display font-900 text-5xl md:text-7xl leading-[1.05] mb-6 animate-fade-in">
             Создаём <span className="text-gradient">будущее</span><br />продуктов вместе
@@ -94,7 +254,40 @@ const Index = () => {
         </div>
       </section>
 
-
+      {/* SHOP — только для DezeYT с shop_enabled */}
+      {user?.shopEnabled && (
+        <section id="shop" className="container py-24">
+          <div className="text-center max-w-2xl mx-auto mb-12">
+            <p className="text-accent font-medium mb-3 tracking-wide uppercase text-sm">Магазин игр</p>
+            <h2 className="font-display font-700 text-4xl md:text-5xl mb-4">
+              Игровой <span className="text-gradient">магазин</span>
+            </h2>
+            <p className="text-muted-foreground text-lg">Эксклюзивный раздел для команды Sem.</p>
+          </div>
+          <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-5">
+            {GAMES.map((g, i) => (
+              <div key={i} className="group glass rounded-2xl overflow-hidden hover:border-primary/40 transition-all hover:-translate-y-1">
+                <div className={`h-36 bg-gradient-to-br ${g.color} flex items-center justify-center relative`}>
+                  <Icon name="Gamepad2" size={48} className="text-white/80" />
+                  <span className="absolute top-3 right-3 text-xs font-medium bg-black/30 text-white rounded-full px-2.5 py-1">
+                    {g.badge}
+                  </span>
+                </div>
+                <div className="p-5">
+                  <p className="text-xs text-muted-foreground mb-1">{g.genre}</p>
+                  <h3 className="font-display font-600 text-base mb-3">{g.title}</h3>
+                  <div className="flex items-center justify-between">
+                    <span className="font-bold text-primary">{g.price}</span>
+                    <Button size="sm" className="rounded-lg bg-primary hover:bg-primary/90 text-xs h-8">
+                      Купить
+                    </Button>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </section>
+      )}
 
       {/* JOIN / REGISTER */}
       <section id="join" className="container py-24">
@@ -120,30 +313,23 @@ const Index = () => {
                 ))}
               </ul>
             </div>
-
-            <div className="glass rounded-2xl p-7">
-              <h3 className="font-display font-600 text-xl mb-6">Регистрация аккаунта</h3>
-              <div className="space-y-4">
-                <div className="space-y-2">
-                  <Label htmlFor="name">Имя</Label>
-                  <Input id="name" placeholder="Александра" className="h-11 bg-secondary/50 border-border rounded-xl" />
+            <div className="flex flex-col items-center justify-center gap-4">
+              {user ? (
+                <div className="text-center glass rounded-2xl p-8 w-full">
+                  <Icon name="CheckCircle" size={48} className="mx-auto mb-4 text-primary" />
+                  <h3 className="font-display font-600 text-xl mb-2">Вы уже в команде!</h3>
+                  <p className="text-muted-foreground text-sm">Добро пожаловать, <span className="text-primary font-medium">{user.username}</span></p>
                 </div>
-                <div className="space-y-2">
-                  <Label htmlFor="email">Email</Label>
-                  <Input id="email" type="email" placeholder="you@mail.ru" className="h-11 bg-secondary/50 border-border rounded-xl" />
+              ) : (
+                <div className="glass rounded-2xl p-8 w-full text-center">
+                  <Icon name="UserPlus" size={48} className="mx-auto mb-4 text-primary" />
+                  <h3 className="font-display font-600 text-xl mb-4">Присоединяйся к Sem</h3>
+                  <Button onClick={openModal} className="w-full h-12 rounded-xl bg-primary hover:bg-primary/90 font-medium">
+                    Создать аккаунт
+                    <Icon name="Sparkles" size={16} className="ml-1.5" />
+                  </Button>
                 </div>
-                <div className="space-y-2">
-                  <Label htmlFor="pass">Пароль</Label>
-                  <Input id="pass" type="password" placeholder="••••••••" className="h-11 bg-secondary/50 border-border rounded-xl" />
-                </div>
-                <Button className="w-full h-12 rounded-xl bg-primary hover:bg-primary/90 font-medium mt-2">
-                  Создать аккаунт
-                  <Icon name="Sparkles" size={16} className="ml-1.5" />
-                </Button>
-                <p className="text-xs text-center text-muted-foreground">
-                  Уже есть аккаунт? <a href="#" className="text-primary hover:underline">Войти</a>
-                </p>
-              </div>
+              )}
             </div>
           </div>
         </div>
@@ -167,6 +353,4 @@ const Index = () => {
       </footer>
     </div>
   );
-};
-
-export default Index;
+}
