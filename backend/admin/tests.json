@@ -11,6 +11,16 @@
       "bodyMatcher": "partial"
     },
     {
+      "name": "List games as admin",
+      "method": "POST",
+      "path": "/",
+      "headers": { "X-Admin-User": "DezeYT" },
+      "body": { "action": "list_games" },
+      "expectedStatus": 200,
+      "expectedBody": { "games": [] },
+      "bodyMatcher": "partial"
+    },
+    {
       "name": "Reject non-admin",
       "method": "POST",
       "path": "/",

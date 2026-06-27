@@ -21,22 +21,74 @@ const VALUES = [
   { icon: 'TrendingUp', title: 'Рост', text: 'Бюджет на обучение, менторство и реальные карьерные треки.' },
 ];
 
-const GAMES = [
-  { title: 'Cyberpunk 2077', genre: 'RPG', price: '1 299 ₽', badge: 'Хит', color: 'from-yellow-500 to-orange-500' },
-  { title: 'Elden Ring', genre: 'Action RPG', price: '2 499 ₽', badge: 'Топ', color: 'from-purple-500 to-pink-500' },
-  { title: 'Hollow Knight', genre: 'Метроидвания', price: '399 ₽', badge: 'Инди', color: 'from-blue-500 to-cyan-500' },
-  { title: 'GTA VI', genre: 'Open World', price: '4 999 ₽', badge: 'Новинка', color: 'from-green-500 to-emerald-500' },
+const ROLE_LABELS: Record<string, string> = {
+  buyer: 'Покупатель',
+  seller: 'Продавец',
+  moderator: 'Модератор',
+  admin: 'Администратор',
+};
+
+const ROLE_COLORS: Record<string, string> = {
+  buyer: 'bg-blue-500/20 text-blue-400',
+  seller: 'bg-emerald-500/20 text-emerald-400',
+  moderator: 'bg-yellow-500/20 text-yellow-400',
+  admin: 'bg-accent/20 text-accent',
+};
+
+const GAME_COLORS = [
+  { label: 'Жёлтый → Оранжевый', value: 'from-yellow-500 to-orange-500' },
+  { label: 'Фиолетовый → Розовый', value: 'from-purple-500 to-pink-500' },
+  { label: 'Синий → Голубой', value: 'from-blue-500 to-cyan-500' },
+  { label: 'Зелёный → Изумрудный', value: 'from-green-500 to-emerald-500' },
+  { label: 'Красный → Розовый', value: 'from-red-500 to-pink-500' },
+  { label: 'Индиго → Фиолетовый', value: 'from-indigo-500 to-purple-500' },
 ];
 
-type AuthUser = { username: string; shopEnabled: boolean } | null;
+type AuthUser = { username: string; shopEnabled: boolean; role: string } | null;
 type Page = 'home' | 'account';
-type AccountTab = 'profile' | 'users' | 'site';
+type AccountTab = 'profile' | 'users' | 'games' | 'site';
 
-interface UserRow {
-  id: number;
-  username: string;
-  shop_enabled: boolean;
-  created_at: string;
+interface UserRow { id: number; username: string; shop_enabled: boolean; role: string; created_at: string; }
+interface GameRow { id: number; title: string; genre: string; price: string; badge: string; color: string; }
+
+// Компонент магазина — загружает игры из БД
+function GamesSection({ adminFetch }: { adminFetch: (b: object) => Promise<Response> }) {
+  const [games, setGames] = useState<GameRow[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    adminFetch({ action: 'list_games' })
+      .then(r => r.json())
+      .then(d => { if (d.games) setGames(d.games); })
+      .finally(() => setLoading(false));
+  }, [adminFetch]);
+
+  if (loading) return (
+    <div className="flex justify-center py-16 text-muted-foreground gap-2">
+      <Icon name="Loader2" size={20} className="animate-spin" /> Загрузка...
+    </div>
+  );
+
+  return (
+    <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-5">
+      {games.map((g, i) => (
+        <div key={g.id} className="group glass rounded-2xl overflow-hidden hover:border-primary/40 transition-all hover:-translate-y-1" style={{ animationDelay: `${i * 0.05}s` }}>
+          <div className={`h-36 bg-gradient-to-br ${g.color} flex items-center justify-center relative`}>
+            <Icon name="Gamepad2" size={48} className="text-white/80" />
+            {g.badge && <span className="absolute top-3 right-3 text-xs font-medium bg-black/30 text-white rounded-full px-2.5 py-1">{g.badge}</span>}
+          </div>
+          <div className="p-5">
+            <p className="text-xs text-muted-foreground mb-1">{g.genre}</p>
+            <h3 className="font-display font-600 text-base mb-3">{g.title}</h3>
+            <div className="flex items-center justify-between">
+              <span className="font-bold text-primary">{g.price}</span>
+              <Button size="sm" className="rounded-lg bg-primary hover:bg-primary/90 text-xs h-8">Купить</Button>
+            </div>
+          </div>
+        </div>
+      ))}
+    </div>
+  );
 }
 
 export default function Index() {
@@ -50,16 +102,25 @@ export default function Index() {
   const [regName, setRegName] = useState('');
   const [regPass, setRegPass] = useState('');
   const [regErr, setRegErr] = useState('');
-
   const [loginName, setLoginName] = useState('');
   const [loginPass, setLoginPass] = useState('');
   const [loginErr, setLoginErr] = useState('');
 
-  // Admin users list
+  // Users tab
   const [users, setUsers] = useState<UserRow[]>([]);
   const [usersLoading, setUsersLoading] = useState(false);
   const [usersErr, setUsersErr] = useState('');
   const [actionLoading, setActionLoading] = useState<number | null>(null);
+
+  // Games tab
+  const [games, setGames] = useState<GameRow[]>([]);
+  const [gamesLoading, setGamesLoading] = useState(false);
+  const [gamesErr, setGamesErr] = useState('');
+  const [gameAction, setGameAction] = useState<number | null>(null);
+  const [showAddGame, setShowAddGame] = useState(false);
+  const [newGame, setNewGame] = useState({ title: '', genre: '', price: '', badge: '', color: GAME_COLORS[0].value });
+  const [addGameErr, setAddGameErr] = useState('');
+  const [addGameLoading, setAddGameLoading] = useState(false);
 
   const isAdmin = user?.username === 'DezeYT';
 
@@ -75,31 +136,47 @@ export default function Index() {
   }, []);
 
   const loadUsers = useCallback(async () => {
-    setUsersLoading(true);
-    setUsersErr('');
+    setUsersLoading(true); setUsersErr('');
     try {
       const res = await adminFetch({ action: 'list' });
       const data = await res.json();
       if (!res.ok) return setUsersErr(data.error || 'Ошибка загрузки');
       setUsers(data.users);
-    } catch {
-      setUsersErr('Ошибка соединения');
-    } finally {
-      setUsersLoading(false);
-    }
+    } catch { setUsersErr('Ошибка соединения'); }
+    finally { setUsersLoading(false); }
+  }, [adminFetch]);
+
+  const loadGames = useCallback(async () => {
+    setGamesLoading(true); setGamesErr('');
+    try {
+      const res = await adminFetch({ action: 'list_games' });
+      const data = await res.json();
+      if (!res.ok) return setGamesErr(data.error || 'Ошибка загрузки');
+      setGames(data.games);
+    } catch { setGamesErr('Ошибка соединения'); }
+    finally { setGamesLoading(false); }
   }, [adminFetch]);
 
   useEffect(() => {
     if (accountTab === 'users' && isAdmin) loadUsers();
-  }, [accountTab, isAdmin, loadUsers]);
+    if (accountTab === 'games' && isAdmin) loadGames();
+  }, [accountTab, isAdmin, loadUsers, loadGames]);
 
   const toggleShop = async (uid: number) => {
     setActionLoading(uid);
     try {
       const res = await adminFetch({ action: 'toggle_shop', user_id: uid });
       const data = await res.json();
-      if (!res.ok) return;
-      setUsers((prev) => prev.map((u) => u.id === uid ? { ...u, shop_enabled: data.shop_enabled } : u));
+      if (res.ok) setUsers(prev => prev.map(u => u.id === uid ? { ...u, shop_enabled: data.shop_enabled } : u));
+    } finally { setActionLoading(null); }
+  };
+
+  const setRole = async (uid: number, username: string, role: string) => {
+    setActionLoading(uid);
+    try {
+      const res = await adminFetch({ action: 'set_role', user_id: uid, username, role });
+      const data = await res.json();
+      if (res.ok) setUsers(prev => prev.map(u => u.id === uid ? { ...u, role: data.role } : u));
     } finally { setActionLoading(null); }
   };
 
@@ -108,8 +185,33 @@ export default function Index() {
     setActionLoading(uid);
     try {
       const res = await adminFetch({ action: 'delete', user_id: uid, username });
-      if (res.ok) setUsers((prev) => prev.filter((u) => u.id !== uid));
+      if (res.ok) setUsers(prev => prev.filter(u => u.id !== uid));
     } finally { setActionLoading(null); }
+  };
+
+  const deleteGame = async (gid: number) => {
+    if (!confirm('Удалить игру?')) return;
+    setGameAction(gid);
+    try {
+      const res = await adminFetch({ action: 'delete_game', game_id: gid });
+      if (res.ok) setGames(prev => prev.filter(g => g.id !== gid));
+    } finally { setGameAction(null); }
+  };
+
+  const addGame = async () => {
+    if (!newGame.title.trim() || !newGame.genre.trim() || !newGame.price.trim()) {
+      return setAddGameErr('Заполните название, жанр и цену');
+    }
+    setAddGameLoading(true); setAddGameErr('');
+    try {
+      const res = await adminFetch({ action: 'add_game', ...newGame });
+      const data = await res.json();
+      if (!res.ok) return setAddGameErr(data.error || 'Ошибка');
+      setGames(prev => [...prev, data]);
+      setNewGame({ title: '', genre: '', price: '', badge: '', color: GAME_COLORS[0].value });
+      setShowAddGame(false);
+    } catch { setAddGameErr('Ошибка соединения'); }
+    finally { setAddGameLoading(false); }
   };
 
   const handleRegister = async () => {
@@ -117,16 +219,11 @@ export default function Index() {
     if (regPass.length < 4) return setRegErr('Пароль минимум 4 символа');
     setLoading(true); setRegErr('');
     try {
-      const res = await fetch(AUTH_URL, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'register', username: regName, password: regPass }),
-      });
+      const res = await fetch(AUTH_URL, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'register', username: regName, password: regPass }) });
       const data = await res.json();
       if (!res.ok) return setRegErr(data.error || 'Ошибка регистрации');
-      setUser({ username: data.username, shopEnabled: data.shop_enabled });
-      setPage('account'); setAccountTab('profile');
-      closeAuthModal();
+      setUser({ username: data.username, shopEnabled: data.shop_enabled, role: data.role || 'buyer' });
+      setPage('account'); setAccountTab('profile'); closeAuthModal();
     } catch { setRegErr('Ошибка соединения. Попробуйте позже.'); }
     finally { setLoading(false); }
   };
@@ -136,23 +233,18 @@ export default function Index() {
     if (!loginPass) return setLoginErr('Введите пароль');
     setLoading(true); setLoginErr('');
     try {
-      const res = await fetch(AUTH_URL, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'login', username: loginName, password: loginPass }),
-      });
+      const res = await fetch(AUTH_URL, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'login', username: loginName, password: loginPass }) });
       const data = await res.json();
       if (!res.ok) return setLoginErr(data.error || 'Ошибка входа');
-      setUser({ username: data.username, shopEnabled: data.shop_enabled });
-      setPage('account'); setAccountTab('profile');
-      closeAuthModal();
+      setUser({ username: data.username, shopEnabled: data.shop_enabled, role: data.role || 'buyer' });
+      setPage('account'); setAccountTab('profile'); closeAuthModal();
     } catch { setLoginErr('Ошибка соединения. Попробуйте позже.'); }
     finally { setLoading(false); }
   };
 
   const handleLogout = () => { setUser(null); setPage('home'); };
 
-  // ──────────────────────────── ACCOUNT PAGE ────────────────────────────
+  // ──────────────────────── ACCOUNT PAGE ────────────────────────
   if (page === 'account' && user) {
     return (
       <div className="min-h-screen bg-background overflow-x-hidden grain">
@@ -161,13 +253,11 @@ export default function Index() {
             <button onClick={() => setPage('home')} className="font-display font-900 text-2xl tracking-tight">
               S<span className="text-gradient">e</span>m
             </button>
-            <div className="hidden md:flex items-center gap-8 text-sm text-muted-foreground">
+            <div className="hidden md:flex items-center gap-6 text-sm text-muted-foreground">
               <button onClick={() => setPage('home')} className="hover:text-foreground transition-colors">На главную</button>
               {user.shopEnabled && (
                 <button onClick={() => { setPage('home'); setTimeout(() => document.getElementById('shop')?.scrollIntoView({ behavior: 'smooth' }), 100); }}
-                  className="hover:text-foreground transition-colors text-accent font-medium">
-                  Магазин игр
-                </button>
+                  className="hover:text-foreground transition-colors text-accent font-medium">Магазин игр</button>
               )}
             </div>
             <div className="flex items-center gap-3">
@@ -187,9 +277,11 @@ export default function Index() {
             </div>
             <div>
               <h1 className="font-display font-700 text-2xl">{user.username}</h1>
-              <p className="text-muted-foreground text-sm mt-0.5">
-                {isAdmin ? 'Владелец · Администратор' : 'Участник команды Sem'}
-              </p>
+              <div className="flex items-center gap-2 mt-1">
+                <span className={`text-xs font-medium px-2.5 py-1 rounded-full ${ROLE_COLORS[user.role] || ROLE_COLORS.buyer}`}>
+                  {ROLE_LABELS[user.role] || user.role}
+                </span>
+              </div>
             </div>
           </div>
 
@@ -199,18 +291,20 @@ export default function Index() {
               className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium transition-all ${accountTab === 'profile' ? 'bg-primary text-white' : 'glass text-muted-foreground hover:text-foreground'}`}>
               <Icon name="User" size={15} /> Профиль
             </button>
-            {isAdmin && (
-              <>
-                <button onClick={() => setAccountTab('users')}
-                  className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium transition-all ${accountTab === 'users' ? 'bg-accent text-white' : 'glass text-muted-foreground hover:text-foreground'}`}>
-                  <Icon name="Users" size={15} /> Пользователи
-                </button>
-                <button onClick={() => setAccountTab('site')}
-                  className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium transition-all ${accountTab === 'site' ? 'bg-accent text-white' : 'glass text-muted-foreground hover:text-foreground'}`}>
-                  <Icon name="Settings2" size={15} /> Управление сайтом
-                </button>
-              </>
-            )}
+            {isAdmin && <>
+              <button onClick={() => setAccountTab('users')}
+                className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium transition-all ${accountTab === 'users' ? 'bg-accent text-white' : 'glass text-muted-foreground hover:text-foreground'}`}>
+                <Icon name="Users" size={15} /> Пользователи
+              </button>
+              <button onClick={() => setAccountTab('games')}
+                className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium transition-all ${accountTab === 'games' ? 'bg-accent text-white' : 'glass text-muted-foreground hover:text-foreground'}`}>
+                <Icon name="Gamepad2" size={15} /> Управление магазином
+              </button>
+              <button onClick={() => setAccountTab('site')}
+                className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium transition-all ${accountTab === 'site' ? 'bg-accent text-white' : 'glass text-muted-foreground hover:text-foreground'}`}>
+                <Icon name="Settings2" size={15} /> Сайт
+              </button>
+            </>}
           </div>
 
           {/* TAB: PROFILE */}
@@ -225,8 +319,8 @@ export default function Index() {
                   </div>
                   <div className="flex justify-between items-center py-3 border-b border-border">
                     <span className="text-muted-foreground text-sm">Роль</span>
-                    <span className={`text-sm font-medium px-3 py-1 rounded-full ${isAdmin ? 'bg-accent/20 text-accent' : 'bg-primary/20 text-primary'}`}>
-                      {isAdmin ? 'Администратор' : 'Участник'}
+                    <span className={`text-sm font-medium px-3 py-1 rounded-full ${ROLE_COLORS[user.role] || ROLE_COLORS.buyer}`}>
+                      {ROLE_LABELS[user.role] || user.role}
                     </span>
                   </div>
                   <div className="flex justify-between items-center py-3">
@@ -248,71 +342,161 @@ export default function Index() {
             <div className="animate-fade-in">
               <div className="glass rounded-2xl overflow-hidden">
                 <div className="flex items-center justify-between p-5 border-b border-border">
-                  <h3 className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
-                    Все аккаунты
-                  </h3>
+                  <h3 className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Все аккаунты</h3>
                   <Button size="sm" variant="ghost" onClick={loadUsers} className="rounded-lg h-8 text-xs">
                     <Icon name="RefreshCw" size={14} className="mr-1.5" /> Обновить
                   </Button>
                 </div>
-
                 {usersLoading && (
                   <div className="flex items-center justify-center py-16 text-muted-foreground gap-2">
                     <Icon name="Loader2" size={20} className="animate-spin" /> Загрузка...
                   </div>
                 )}
-
-                {usersErr && (
-                  <div className="p-6 text-center text-destructive text-sm">{usersErr}</div>
-                )}
-
+                {usersErr && <div className="p-6 text-center text-destructive text-sm">{usersErr}</div>}
                 {!usersLoading && !usersErr && (
                   <div className="divide-y divide-border">
-                    {users.length === 0 && (
-                      <div className="py-12 text-center text-muted-foreground text-sm">Пользователей нет</div>
-                    )}
-                    {users.map((u) => (
-                      <div key={u.id} className="flex items-center justify-between px-5 py-4 hover:bg-secondary/30 transition-colors">
-                        <div className="flex items-center gap-3">
-                          <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-primary/40 to-accent/40 flex items-center justify-center text-sm font-bold">
-                            {u.username[0].toUpperCase()}
+                    {users.length === 0 && <div className="py-12 text-center text-muted-foreground text-sm">Пользователей нет</div>}
+                    {users.map(u => (
+                      <div key={u.id} className="px-5 py-4 hover:bg-secondary/30 transition-colors">
+                        <div className="flex items-center justify-between flex-wrap gap-3">
+                          <div className="flex items-center gap-3">
+                            <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-primary/40 to-accent/40 flex items-center justify-center text-sm font-bold shrink-0">
+                              {u.username[0].toUpperCase()}
+                            </div>
+                            <div>
+                              <p className="font-medium text-sm flex items-center gap-2">
+                                {u.username}
+                                {u.username === 'DezeYT' && <span className="text-xs bg-accent/20 text-accent px-2 py-0.5 rounded-full">Владелец</span>}
+                              </p>
+                              <p className="text-xs text-muted-foreground mt-0.5">{u.created_at}</p>
+                            </div>
                           </div>
-                          <div>
-                            <p className="font-medium text-sm flex items-center gap-2">
-                              {u.username}
-                              {u.username === 'DezeYT' && (
-                                <span className="text-xs bg-accent/20 text-accent px-2 py-0.5 rounded-full">Владелец</span>
-                              )}
-                            </p>
-                            <p className="text-xs text-muted-foreground mt-0.5">{u.created_at}</p>
-                          </div>
-                        </div>
-                        <div className="flex items-center gap-2">
-                          {/* Toggle shop */}
-                          <button
-                            onClick={() => toggleShop(u.id)}
-                            disabled={actionLoading === u.id}
-                            title={u.shop_enabled ? 'Отключить магазин' : 'Включить магазин'}
-                            className={`flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg font-medium transition-all ${u.shop_enabled ? 'bg-green-500/20 text-green-400 hover:bg-green-500/30' : 'bg-muted text-muted-foreground hover:bg-secondary'}`}
-                          >
-                            {actionLoading === u.id
-                              ? <Icon name="Loader2" size={13} className="animate-spin" />
-                              : <Icon name={u.shop_enabled ? 'ShoppingBag' : 'ShoppingBag'} size={13} />
-                            }
-                            {u.shop_enabled ? 'Магазин вкл' : 'Магазин выкл'}
-                          </button>
-                          {/* Delete */}
-                          {u.username !== 'DezeYT' && (
+                          <div className="flex items-center gap-2 flex-wrap">
+                            {u.username !== 'DezeYT' && (
+                              <select
+                                value={u.role}
+                                disabled={actionLoading === u.id}
+                                onChange={e => setRole(u.id, u.username, e.target.value)}
+                                className="text-xs px-2.5 py-1.5 rounded-lg bg-secondary border border-border text-foreground cursor-pointer focus:outline-none focus:border-primary transition-colors"
+                              >
+                                {Object.entries(ROLE_LABELS).map(([val, label]) => (
+                                  <option key={val} value={val}>{label}</option>
+                                ))}
+                              </select>
+                            )}
                             <button
-                              onClick={() => deleteUser(u.id, u.username)}
+                              onClick={() => toggleShop(u.id)}
                               disabled={actionLoading === u.id}
-                              title="Удалить аккаунт"
-                              className="w-8 h-8 rounded-lg flex items-center justify-center text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-all"
+                              className={`flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg font-medium transition-all ${u.shop_enabled ? 'bg-green-500/20 text-green-400 hover:bg-green-500/30' : 'bg-muted text-muted-foreground hover:bg-secondary'}`}
                             >
-                              <Icon name="Trash2" size={15} />
+                              {actionLoading === u.id
+                                ? <Icon name="Loader2" size={13} className="animate-spin" />
+                                : <Icon name="ShoppingBag" size={13} />}
+                              {u.shop_enabled ? 'Магазин вкл' : 'Магазин выкл'}
                             </button>
-                          )}
+                            {u.username !== 'DezeYT' && (
+                              <button
+                                onClick={() => deleteUser(u.id, u.username)}
+                                disabled={actionLoading === u.id}
+                                className="w-8 h-8 rounded-lg flex items-center justify-center text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-all"
+                              >
+                                <Icon name="Trash2" size={15} />
+                              </button>
+                            )}
+                          </div>
                         </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* TAB: GAMES */}
+          {accountTab === 'games' && isAdmin && (
+            <div className="animate-fade-in space-y-4">
+              <div className="glass rounded-2xl overflow-hidden">
+                <div className="flex items-center justify-between p-5 border-b border-border">
+                  <h3 className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Игры в магазине</h3>
+                  <div className="flex gap-2">
+                    <Button size="sm" variant="ghost" onClick={loadGames} className="rounded-lg h-8 text-xs">
+                      <Icon name="RefreshCw" size={14} className="mr-1.5" /> Обновить
+                    </Button>
+                    <Button size="sm" onClick={() => { setShowAddGame(v => !v); setAddGameErr(''); }} className="rounded-lg h-8 text-xs bg-primary hover:bg-primary/90">
+                      <Icon name={showAddGame ? 'X' : 'Plus'} size={14} className="mr-1.5" />
+                      {showAddGame ? 'Отмена' : 'Добавить игру'}
+                    </Button>
+                  </div>
+                </div>
+
+                {showAddGame && (
+                  <div className="p-5 border-b border-border bg-secondary/20">
+                    <div className="grid sm:grid-cols-2 gap-3 mb-3">
+                      <div>
+                        <Label className="text-xs mb-1 block text-muted-foreground">Название *</Label>
+                        <Input value={newGame.title} onChange={e => setNewGame(p => ({ ...p, title: e.target.value }))}
+                          placeholder="Cyberpunk 2077" className="h-9 text-sm bg-secondary/50 border-border rounded-xl" />
+                      </div>
+                      <div>
+                        <Label className="text-xs mb-1 block text-muted-foreground">Жанр *</Label>
+                        <Input value={newGame.genre} onChange={e => setNewGame(p => ({ ...p, genre: e.target.value }))}
+                          placeholder="RPG" className="h-9 text-sm bg-secondary/50 border-border rounded-xl" />
+                      </div>
+                      <div>
+                        <Label className="text-xs mb-1 block text-muted-foreground">Цена *</Label>
+                        <Input value={newGame.price} onChange={e => setNewGame(p => ({ ...p, price: e.target.value }))}
+                          placeholder="1 299 ₽" className="h-9 text-sm bg-secondary/50 border-border rounded-xl" />
+                      </div>
+                      <div>
+                        <Label className="text-xs mb-1 block text-muted-foreground">Бейдж</Label>
+                        <Input value={newGame.badge} onChange={e => setNewGame(p => ({ ...p, badge: e.target.value }))}
+                          placeholder="Хит" className="h-9 text-sm bg-secondary/50 border-border rounded-xl" />
+                      </div>
+                      <div className="sm:col-span-2">
+                        <Label className="text-xs mb-1 block text-muted-foreground">Цвет карточки</Label>
+                        <div className="flex gap-2 flex-wrap mt-1">
+                          {GAME_COLORS.map(c => (
+                            <button key={c.value} onClick={() => setNewGame(p => ({ ...p, color: c.value }))}
+                              className={`w-8 h-8 rounded-lg bg-gradient-to-br ${c.value} border-2 transition-all ${newGame.color === c.value ? 'border-white scale-110' : 'border-transparent opacity-70'}`}
+                              title={c.label} />
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+                    {addGameErr && <p className="text-xs text-destructive mb-2">{addGameErr}</p>}
+                    <Button onClick={addGame} disabled={addGameLoading} className="h-9 rounded-xl bg-primary hover:bg-primary/90 text-sm">
+                      {addGameLoading ? <Icon name="Loader2" size={15} className="animate-spin mr-1.5" /> : <Icon name="Plus" size={15} className="mr-1.5" />}
+                      Добавить
+                    </Button>
+                  </div>
+                )}
+
+                {gamesLoading && (
+                  <div className="flex items-center justify-center py-16 text-muted-foreground gap-2">
+                    <Icon name="Loader2" size={20} className="animate-spin" /> Загрузка...
+                  </div>
+                )}
+                {gamesErr && <div className="p-6 text-center text-destructive text-sm">{gamesErr}</div>}
+                {!gamesLoading && !gamesErr && (
+                  <div className="divide-y divide-border">
+                    {games.length === 0 && <div className="py-12 text-center text-muted-foreground text-sm">Игр нет</div>}
+                    {games.map(g => (
+                      <div key={g.id} className="flex items-center gap-4 px-5 py-3 hover:bg-secondary/30 transition-colors">
+                        <div className={`w-12 h-12 rounded-xl bg-gradient-to-br ${g.color} flex items-center justify-center shrink-0`}>
+                          <Icon name="Gamepad2" size={22} className="text-white/80" />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="font-medium text-sm truncate">{g.title}</p>
+                          <p className="text-xs text-muted-foreground">{g.genre} · {g.price}{g.badge ? ` · ${g.badge}` : ''}</p>
+                        </div>
+                        <button
+                          onClick={() => deleteGame(g.id)}
+                          disabled={gameAction === g.id}
+                          className="w-8 h-8 rounded-lg flex items-center justify-center text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-all shrink-0"
+                        >
+                          {gameAction === g.id ? <Icon name="Loader2" size={15} className="animate-spin" /> : <Icon name="Trash2" size={15} />}
+                        </button>
                       </div>
                     ))}
                   </div>
@@ -328,13 +512,13 @@ export default function Index() {
                 <h3 className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-5">Управление сайтом</h3>
                 <div className="grid sm:grid-cols-2 gap-3">
                   {[
-                    { icon: 'LayoutDashboard', label: 'Главная страница', desc: 'Редактировать hero и статистику' },
-                    { icon: 'Gamepad2', label: 'Магазин игр', desc: 'Добавить / удалить игры' },
+                    { icon: 'LayoutDashboard', label: 'Главная страница', desc: 'Редактировать hero и статистику', action: undefined },
+                    { icon: 'Gamepad2', label: 'Магазин игр', desc: 'Добавить / удалить игры', action: () => setAccountTab('games') },
                     { icon: 'Users', label: 'Пользователи', desc: 'Управление аккаунтами', action: () => setAccountTab('users') },
                     { icon: 'ToggleRight', label: 'Доступы', desc: 'Включить функции для аккаунтов', action: () => setAccountTab('users') },
-                  ].map((item) => (
+                  ].map(item => (
                     <div key={item.label} onClick={item.action}
-                      className="group glass rounded-xl p-4 hover:border-accent/40 transition-all cursor-pointer hover:-translate-y-0.5">
+                      className={`group glass rounded-xl p-4 transition-all ${item.action ? 'hover:border-accent/40 cursor-pointer hover:-translate-y-0.5' : 'opacity-50'}`}>
                       <div className="flex items-start gap-3">
                         <div className="w-9 h-9 rounded-lg bg-gradient-to-br from-accent to-primary flex items-center justify-center shrink-0">
                           <Icon name={item.icon} size={18} className="text-white" />
@@ -359,19 +543,15 @@ export default function Index() {
     );
   }
 
-  // ──────────────────────────── HOME PAGE ────────────────────────────
+  // ──────────────────────── HOME PAGE ────────────────────────
   return (
     <div className="min-h-screen bg-background overflow-x-hidden grain">
       <header className="fixed top-0 inset-x-0 z-50 glass">
         <nav className="container flex items-center justify-between h-16">
-          <a href="#" className="font-display font-900 text-2xl tracking-tight">
-            S<span className="text-gradient">e</span>m
-          </a>
+          <a href="#" className="font-display font-900 text-2xl tracking-tight">S<span className="text-gradient">e</span>m</a>
           <div className="hidden md:flex items-center gap-8 text-sm text-muted-foreground">
             <a href="#about" className="hover:text-foreground transition-colors">О компании</a>
-            {user?.shopEnabled && (
-              <a href="#shop" className="hover:text-foreground transition-colors text-accent font-medium">Магазин игр</a>
-            )}
+            {user?.shopEnabled && <a href="#shop" className="hover:text-foreground transition-colors text-accent font-medium">Магазин игр</a>}
             <a href="#join" className="hover:text-foreground transition-colors">Стать частью</a>
           </div>
           {user ? (
@@ -390,7 +570,7 @@ export default function Index() {
       {authModal && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4" onClick={closeAuthModal}>
           <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" />
-          <div className="relative glass rounded-2xl w-full max-w-md p-8 animate-fade-in" onClick={(e) => e.stopPropagation()}>
+          <div className="relative glass rounded-2xl w-full max-w-md p-8 animate-fade-in" onClick={e => e.stopPropagation()}>
             <button onClick={closeAuthModal} className="absolute top-4 right-4 text-muted-foreground hover:text-foreground">
               <Icon name="X" size={20} />
             </button>
@@ -409,13 +589,13 @@ export default function Index() {
                 <h3 className="font-display font-600 text-xl mb-2">Создать аккаунт</h3>
                 <div className="space-y-2">
                   <Label>Имя пользователя</Label>
-                  <Input placeholder="Александра" value={regName} onChange={(e) => setRegName(e.target.value)}
-                    onKeyDown={(e) => e.key === 'Enter' && handleRegister()} className="h-11 bg-secondary/50 border-border rounded-xl" />
+                  <Input placeholder="Александра" value={regName} onChange={e => setRegName(e.target.value)}
+                    onKeyDown={e => e.key === 'Enter' && handleRegister()} className="h-11 bg-secondary/50 border-border rounded-xl" />
                 </div>
                 <div className="space-y-2">
                   <Label>Пароль</Label>
-                  <Input type="password" placeholder="••••••••" value={regPass} onChange={(e) => setRegPass(e.target.value)}
-                    onKeyDown={(e) => e.key === 'Enter' && handleRegister()} className="h-11 bg-secondary/50 border-border rounded-xl" />
+                  <Input type="password" placeholder="••••••••" value={regPass} onChange={e => setRegPass(e.target.value)}
+                    onKeyDown={e => e.key === 'Enter' && handleRegister()} className="h-11 bg-secondary/50 border-border rounded-xl" />
                 </div>
                 {regErr && <p className="text-sm text-destructive">{regErr}</p>}
                 <Button onClick={handleRegister} disabled={loading} className="w-full h-12 rounded-xl bg-primary hover:bg-primary/90 font-medium">
@@ -431,13 +611,13 @@ export default function Index() {
                 <h3 className="font-display font-600 text-xl mb-2">Добро пожаловать</h3>
                 <div className="space-y-2">
                   <Label>Имя пользователя</Label>
-                  <Input placeholder="DezeYT" value={loginName} onChange={(e) => setLoginName(e.target.value)}
-                    onKeyDown={(e) => e.key === 'Enter' && handleLogin()} className="h-11 bg-secondary/50 border-border rounded-xl" />
+                  <Input placeholder="DezeYT" value={loginName} onChange={e => setLoginName(e.target.value)}
+                    onKeyDown={e => e.key === 'Enter' && handleLogin()} className="h-11 bg-secondary/50 border-border rounded-xl" />
                 </div>
                 <div className="space-y-2">
                   <Label>Пароль</Label>
-                  <Input type="password" placeholder="••••••••" value={loginPass} onChange={(e) => setLoginPass(e.target.value)}
-                    onKeyDown={(e) => e.key === 'Enter' && handleLogin()} className="h-11 bg-secondary/50 border-border rounded-xl" />
+                  <Input type="password" placeholder="••••••••" value={loginPass} onChange={e => setLoginPass(e.target.value)}
+                    onKeyDown={e => e.key === 'Enter' && handleLogin()} className="h-11 bg-secondary/50 border-border rounded-xl" />
                 </div>
                 {loginErr && <p className="text-sm text-destructive">{loginErr}</p>}
                 <Button onClick={handleLogin} disabled={loading} className="w-full h-12 rounded-xl bg-primary hover:bg-primary/90 font-medium">
@@ -515,29 +695,10 @@ export default function Index() {
         <section id="shop" className="container py-24">
           <div className="text-center max-w-2xl mx-auto mb-12">
             <p className="text-accent font-medium mb-3 tracking-wide uppercase text-sm">Магазин игр</p>
-            <h2 className="font-display font-700 text-4xl md:text-5xl mb-4">
-              Игровой <span className="text-gradient">магазин</span>
-            </h2>
+            <h2 className="font-display font-700 text-4xl md:text-5xl mb-4">Игровой <span className="text-gradient">магазин</span></h2>
             <p className="text-muted-foreground text-lg">Эксклюзивный раздел для команды Sem.</p>
           </div>
-          <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-5">
-            {GAMES.map((g, i) => (
-              <div key={i} className="group glass rounded-2xl overflow-hidden hover:border-primary/40 transition-all hover:-translate-y-1">
-                <div className={`h-36 bg-gradient-to-br ${g.color} flex items-center justify-center relative`}>
-                  <Icon name="Gamepad2" size={48} className="text-white/80" />
-                  <span className="absolute top-3 right-3 text-xs font-medium bg-black/30 text-white rounded-full px-2.5 py-1">{g.badge}</span>
-                </div>
-                <div className="p-5">
-                  <p className="text-xs text-muted-foreground mb-1">{g.genre}</p>
-                  <h3 className="font-display font-600 text-base mb-3">{g.title}</h3>
-                  <div className="flex items-center justify-between">
-                    <span className="font-bold text-primary">{g.price}</span>
-                    <Button size="sm" className="rounded-lg bg-primary hover:bg-primary/90 text-xs h-8">Купить</Button>
-                  </div>
-                </div>
-              </div>
-            ))}
-          </div>
+          <GamesSection adminFetch={adminFetch} />
         </section>
       )}
 
@@ -548,14 +709,10 @@ export default function Index() {
           <div className="grid lg:grid-cols-2 gap-12 relative">
             <div>
               <p className="text-accent font-medium mb-3 tracking-wide uppercase text-sm">Стать частью команды</p>
-              <h2 className="font-display font-700 text-4xl md:text-5xl leading-tight mb-5">
-                Готов писать историю с нами?
-              </h2>
-              <p className="text-muted-foreground text-lg mb-8">
-                Создай аккаунт — и получи доступ к закрытым вакансиям, прямому контакту с командой и индивидуальному карьерному треку.
-              </p>
+              <h2 className="font-display font-700 text-4xl md:text-5xl leading-tight mb-5">Готов писать историю с нами?</h2>
+              <p className="text-muted-foreground text-lg mb-8">Создай аккаунт — и получи доступ к закрытым вакансиям, прямому контакту с командой и индивидуальному карьерному треку.</p>
               <ul className="space-y-3">
-                {['Прозрачный процесс найма', 'Отклик в один клик', 'Обратная связь по каждому этапу'].map((t) => (
+                {['Прозрачный процесс найма', 'Отклик в один клик', 'Обратная связь по каждому этапу'].map(t => (
                   <li key={t} className="flex items-center gap-3 text-muted-foreground">
                     <span className="w-6 h-6 rounded-full bg-gradient-to-br from-primary to-accent flex items-center justify-center shrink-0">
                       <Icon name="Check" size={14} className="text-white" />
@@ -594,7 +751,7 @@ export default function Index() {
           <div className="font-display font-900 text-2xl">S<span className="text-gradient">e</span>m</div>
           <p className="text-sm text-muted-foreground">© 2026 Sem. Создаём будущее вместе.</p>
           <div className="flex gap-3">
-            {['Send', 'Github', 'Linkedin'].map((s) => (
+            {['Send', 'Github', 'Linkedin'].map(s => (
               <a key={s} href="#" className="w-10 h-10 rounded-full glass flex items-center justify-center hover:border-primary/40 transition-colors">
                 <Icon name={s} size={18} className="text-muted-foreground" />
               </a>

@@ -53,7 +53,7 @@ def handler(event: dict, context) -> dict:
         pw_hash = hash_password(password)
         try:
             cur.execute(
-                f"INSERT INTO {SCHEMA}.users (username, password_hash) VALUES (%s, %s) RETURNING id, shop_enabled",
+                f"INSERT INTO {SCHEMA}.users (username, password_hash, role) VALUES (%s, %s, 'buyer') RETURNING id, shop_enabled, role",
                 (username, pw_hash)
             )
             row = cur.fetchone()
@@ -68,14 +68,14 @@ def handler(event: dict, context) -> dict:
         conn.close()
         return {"statusCode": 200, "headers": CORS,
                 "body": json.dumps({"ok": True, "token": token,
-                                    "username": username, "shop_enabled": row[1]})}
+                                    "username": username, "shop_enabled": row[1], "role": row[2]})}
 
     if action == "login":
         pw_hash = hash_password(password)
 
         # Особый случай: DezeYT — обновляем хэш при первом входе если пароль задан
         cur.execute(
-            f"SELECT id, password_hash, shop_enabled FROM {SCHEMA}.users WHERE username = %s",
+            f"SELECT id, password_hash, shop_enabled, role FROM {SCHEMA}.users WHERE username = %s",
             (username,)
         )
         row = cur.fetchone()
@@ -86,8 +86,8 @@ def handler(event: dict, context) -> dict:
 
         stored_hash = row[1]
         shop_enabled = row[2]
+        role = row[3]
 
-        # Если placeholder — сохраняем введённый пароль как новый
         if stored_hash == "$2b$12$placeholder_will_be_set_on_first_login":
             cur.execute(
                 f"UPDATE {SCHEMA}.users SET password_hash = %s WHERE id = %s",
@@ -103,7 +103,7 @@ def handler(event: dict, context) -> dict:
         conn.close()
         return {"statusCode": 200, "headers": CORS,
                 "body": json.dumps({"ok": True, "token": token,
-                                    "username": username, "shop_enabled": shop_enabled})}
+                                    "username": username, "shop_enabled": shop_enabled, "role": role})}
 
     conn.close()
     return {"statusCode": 400, "headers": CORS,
