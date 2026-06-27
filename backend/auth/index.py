@@ -67,7 +67,7 @@ def handler(event: dict, context) -> dict:
         token = secrets.token_hex(32)
         conn.close()
         return {"statusCode": 200, "headers": CORS,
-                "body": json.dumps({"ok": True, "token": token,
+                "body": json.dumps({"ok": True, "token": token, "id": row[0],
                                     "username": username, "shop_enabled": row[1], "role": row[2]})}
 
     if action == "login":
@@ -102,7 +102,7 @@ def handler(event: dict, context) -> dict:
         token = secrets.token_hex(32)
         conn.close()
         return {"statusCode": 200, "headers": CORS,
-                "body": json.dumps({"ok": True, "token": token,
+                "body": json.dumps({"ok": True, "token": token, "id": row[0],
                                     "username": username, "shop_enabled": shop_enabled, "role": role})}
 
     conn.close()

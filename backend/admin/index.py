@@ -103,12 +103,12 @@ def handler(event: dict, context) -> dict:
         # ── Игры ──────────────────────────────────────────────────
         if action == "list_games":
             cur.execute(
-                f"SELECT id, title, genre, price, badge, color FROM {SCHEMA}.games ORDER BY created_at ASC"
+                f"SELECT id, title, genre, price, badge, color, vk_link FROM {SCHEMA}.games ORDER BY created_at ASC"
             )
             rows = cur.fetchall()
             games = [
                 {"id": r[0], "title": r[1], "genre": r[2],
-                 "price": r[3], "badge": r[4], "color": r[5]}
+                 "price": r[3], "badge": r[4], "color": r[5], "vk_link": r[6]}
                 for r in rows
             ]
             return ok({"games": games})
@@ -119,16 +119,17 @@ def handler(event: dict, context) -> dict:
             price = (body.get("price") or "").strip()
             badge = (body.get("badge") or "").strip()
             color = body.get("color") or "from-purple-500 to-pink-500"
+            vk_link = (body.get("vk_link") or "").strip()
             if not title or not genre or not price:
                 return err(400, "Заполните title, genre, price")
             cur.execute(
-                f"INSERT INTO {SCHEMA}.games (title, genre, price, badge, color) VALUES (%s, %s, %s, %s, %s) RETURNING id",
-                (title, genre, price, badge, color)
+                f"INSERT INTO {SCHEMA}.games (title, genre, price, badge, color, vk_link) VALUES (%s, %s, %s, %s, %s, %s) RETURNING id",
+                (title, genre, price, badge, color, vk_link)
             )
             new_id = cur.fetchone()[0]
             conn.commit()
             return ok({"id": new_id, "title": title, "genre": genre,
-                       "price": price, "badge": badge, "color": color})
+                       "price": price, "badge": badge, "color": color, "vk_link": vk_link})
 
         if action == "delete_game":
             gid = body.get("game_id")
@@ -137,6 +138,55 @@ def handler(event: dict, context) -> dict:
             cur.execute(f"DELETE FROM {SCHEMA}.games WHERE id = %s", (gid,))
             conn.commit()
             return ok({"deleted": True})
+
+        # ── Заявки от продавцов ───────────────────────────────────
+        if action == "list_requests":
+            cur.execute(
+                f"""SELECT gr.id, gr.title, gr.genre, gr.price, gr.badge, gr.color, gr.vk_link,
+                           gr.status, gr.created_at, u.username
+                    FROM {SCHEMA}.game_requests gr
+                    JOIN {SCHEMA}.users u ON u.id = gr.seller_id
+                    ORDER BY gr.created_at DESC"""
+            )
+            rows = cur.fetchall()
+            requests = [
+                {"id": r[0], "title": r[1], "genre": r[2], "price": r[3],
+                 "badge": r[4], "color": r[5], "vk_link": r[6],
+                 "status": r[7],
+                 "created_at": r[8].strftime("%d.%m.%Y %H:%M") if r[8] else "",
+                 "seller": r[9]}
+                for r in rows
+            ]
+            return ok({"requests": requests})
+
+        if action == "approve_request":
+            rid = body.get("request_id")
+            if not rid:
+                return err(400, "Не передан request_id")
+            cur.execute(
+                f"SELECT title, genre, price, badge, color, vk_link FROM {SCHEMA}.game_requests WHERE id = %s AND status = 'pending'",
+                (rid,)
+            )
+            row = cur.fetchone()
+            if not row:
+                return err(404, "Заявка не найдена или уже обработана")
+            title, genre, price, badge, color, vk_link = row
+            cur.execute(
+                f"INSERT INTO {SCHEMA}.games (title, genre, price, badge, color, vk_link) VALUES (%s, %s, %s, %s, %s, %s) RETURNING id",
+                (title, genre, price, badge, color, vk_link)
+            )
+            game_id = cur.fetchone()[0]
+            cur.execute(f"UPDATE {SCHEMA}.game_requests SET status = 'approved' WHERE id = %s", (rid,))
+            conn.commit()
+            return ok({"approved": True, "game_id": game_id})
+
+        if action == "reject_request":
+            rid = body.get("request_id")
+            if not rid:
+                return err(400, "Не передан request_id")
+            cur.execute(f"UPDATE {SCHEMA}.game_requests SET status = 'rejected' WHERE id = %s AND status = 'pending'", (rid,))
+            conn.commit()
+            return ok({"rejected": True})
 
         return err(400, "Неизвестный action")
 

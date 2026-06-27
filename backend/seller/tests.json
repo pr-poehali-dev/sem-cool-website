@@ -1,0 +1,12 @@
+{
+  "tests": [
+    {
+      "name": "Submit without user id",
+      "method": "POST",
+      "path": "/",
+      "body": { "action": "submit_request", "title": "Test", "genre": "RPG", "price": "100 ₽", "vk_link": "https://vk.com/test" },
+      "expectedStatus": 401,
+      "bodyMatcher": "partial"
+    }
+  ]
+}
