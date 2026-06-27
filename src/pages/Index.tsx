@@ -28,12 +28,16 @@ const GAMES = [
 ];
 
 type AuthUser = { username: string; shopEnabled: boolean } | null;
+type Page = 'home' | 'account';
+type AccountTab = 'profile' | 'admin';
 
 export default function Index() {
-  const [modal, setModal] = useState(false);
-  const [tab, setTab] = useState<'register' | 'login'>('register');
+  const [authModal, setAuthModal] = useState(false);
+  const [authTab, setAuthTab] = useState<'register' | 'login'>('register');
   const [user, setUser] = useState<AuthUser>(null);
   const [loading, setLoading] = useState(false);
+  const [page, setPage] = useState<Page>('home');
+  const [accountTab, setAccountTab] = useState<AccountTab>('profile');
 
   const [regName, setRegName] = useState('');
   const [regPass, setRegPass] = useState('');
@@ -43,14 +47,13 @@ export default function Index() {
   const [loginPass, setLoginPass] = useState('');
   const [loginErr, setLoginErr] = useState('');
 
-  const openModal = () => { setModal(true); setTab('register'); setRegErr(''); setLoginErr(''); };
-  const closeModal = () => setModal(false);
+  const openAuthModal = () => { setAuthModal(true); setAuthTab('register'); setRegErr(''); setLoginErr(''); };
+  const closeAuthModal = () => setAuthModal(false);
 
   const handleRegister = async () => {
     if (!regName.trim()) return setRegErr('Введите имя');
     if (regPass.length < 4) return setRegErr('Пароль минимум 4 символа');
-    setLoading(true);
-    setRegErr('');
+    setLoading(true); setRegErr('');
     try {
       const res = await fetch(AUTH_URL, {
         method: 'POST',
@@ -60,19 +63,17 @@ export default function Index() {
       const data = await res.json();
       if (!res.ok) return setRegErr(data.error || 'Ошибка регистрации');
       setUser({ username: data.username, shopEnabled: data.shop_enabled });
-      closeModal();
-    } catch {
-      setRegErr('Ошибка соединения. Попробуйте позже.');
-    } finally {
-      setLoading(false);
-    }
+      setPage('account');
+      setAccountTab('profile');
+      closeAuthModal();
+    } catch { setRegErr('Ошибка соединения. Попробуйте позже.'); }
+    finally { setLoading(false); }
   };
 
   const handleLogin = async () => {
     if (!loginName.trim()) return setLoginErr('Введите имя');
     if (!loginPass) return setLoginErr('Введите пароль');
-    setLoading(true);
-    setLoginErr('');
+    setLoading(true); setLoginErr('');
     try {
       const res = await fetch(AUTH_URL, {
         method: 'POST',
@@ -82,14 +83,153 @@ export default function Index() {
       const data = await res.json();
       if (!res.ok) return setLoginErr(data.error || 'Ошибка входа');
       setUser({ username: data.username, shopEnabled: data.shop_enabled });
-      closeModal();
-    } catch {
-      setLoginErr('Ошибка соединения. Попробуйте позже.');
-    } finally {
-      setLoading(false);
-    }
+      setPage('account');
+      setAccountTab('profile');
+      closeAuthModal();
+    } catch { setLoginErr('Ошибка соединения. Попробуйте позже.'); }
+    finally { setLoading(false); }
   };
 
+  const handleLogout = () => { setUser(null); setPage('home'); };
+
+  const isAdmin = user?.username === 'DezeYT';
+
+  // ────────────────────────────── ACCOUNT PAGE ──────────────────────────────
+  if (page === 'account' && user) {
+    return (
+      <div className="min-h-screen bg-background overflow-x-hidden grain">
+        {/* NAV */}
+        <header className="fixed top-0 inset-x-0 z-50 glass">
+          <nav className="container flex items-center justify-between h-16">
+            <button onClick={() => setPage('home')} className="font-display font-900 text-2xl tracking-tight">
+              S<span className="text-gradient">e</span>m
+            </button>
+            <div className="hidden md:flex items-center gap-8 text-sm text-muted-foreground">
+              <button onClick={() => setPage('home')} className="hover:text-foreground transition-colors">На главную</button>
+              {user.shopEnabled && (
+                <button onClick={() => { setPage('home'); setTimeout(() => document.getElementById('shop')?.scrollIntoView({ behavior: 'smooth' }), 100); }}
+                  className="hover:text-foreground transition-colors text-accent font-medium">
+                  Магазин игр
+                </button>
+              )}
+            </div>
+            <div className="flex items-center gap-3">
+              <span className="text-sm hidden md:block text-primary font-medium">{user.username}</span>
+              <Button variant="ghost" size="sm" className="rounded-full" onClick={handleLogout}>
+                <Icon name="LogOut" size={16} />
+              </Button>
+            </div>
+          </nav>
+        </header>
+
+        <div className="container pt-28 pb-16 max-w-3xl">
+          {/* Header */}
+          <div className="flex items-center gap-5 mb-8 animate-fade-in">
+            <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-primary to-accent flex items-center justify-center text-white font-display font-700 text-2xl">
+              {user.username[0].toUpperCase()}
+            </div>
+            <div>
+              <h1 className="font-display font-700 text-2xl">{user.username}</h1>
+              <p className="text-muted-foreground text-sm mt-0.5">
+                {isAdmin ? 'Владелец · Администратор' : 'Участник команды Sem'}
+              </p>
+            </div>
+          </div>
+
+          {/* Mini-tabs */}
+          <div className="flex gap-2 mb-8 animate-fade-in" style={{ animationDelay: '0.1s' }}>
+            <button
+              onClick={() => setAccountTab('profile')}
+              className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium transition-all ${accountTab === 'profile' ? 'bg-primary text-white' : 'glass text-muted-foreground hover:text-foreground'}`}
+            >
+              <Icon name="User" size={15} />
+              Профиль
+            </button>
+            {isAdmin && (
+              <button
+                onClick={() => setAccountTab('admin')}
+                className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium transition-all ${accountTab === 'admin' ? 'bg-accent text-white' : 'glass text-muted-foreground hover:text-foreground'}`}
+              >
+                <Icon name="Settings2" size={15} />
+                Управление сайтом
+              </button>
+            )}
+          </div>
+
+          {/* TAB: PROFILE */}
+          {accountTab === 'profile' && (
+            <div className="space-y-4 animate-fade-in">
+              <div className="glass rounded-2xl p-6">
+                <h3 className="font-display font-600 text-base mb-4 text-muted-foreground uppercase tracking-wide text-xs">Информация</h3>
+                <div className="space-y-3">
+                  <div className="flex justify-between items-center py-3 border-b border-border">
+                    <span className="text-muted-foreground text-sm">Имя пользователя</span>
+                    <span className="font-medium">{user.username}</span>
+                  </div>
+                  <div className="flex justify-between items-center py-3 border-b border-border">
+                    <span className="text-muted-foreground text-sm">Роль</span>
+                    <span className={`text-sm font-medium px-3 py-1 rounded-full ${isAdmin ? 'bg-accent/20 text-accent' : 'bg-primary/20 text-primary'}`}>
+                      {isAdmin ? 'Администратор' : 'Участник'}
+                    </span>
+                  </div>
+                  <div className="flex justify-between items-center py-3">
+                    <span className="text-muted-foreground text-sm">Магазин игр</span>
+                    <span className={`text-sm font-medium px-3 py-1 rounded-full ${user.shopEnabled ? 'bg-green-500/20 text-green-400' : 'bg-muted text-muted-foreground'}`}>
+                      {user.shopEnabled ? 'Включён' : 'Недоступен'}
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              <Button variant="outline" className="w-full rounded-xl border-border hover:bg-secondary h-11" onClick={handleLogout}>
+                <Icon name="LogOut" size={16} className="mr-2" />
+                Выйти из аккаунта
+              </Button>
+            </div>
+          )}
+
+          {/* TAB: ADMIN */}
+          {accountTab === 'admin' && isAdmin && (
+            <div className="space-y-4 animate-fade-in">
+              <div className="glass rounded-2xl p-6">
+                <h3 className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-5">Управление сайтом</h3>
+                <div className="grid sm:grid-cols-2 gap-3">
+                  {[
+                    { icon: 'LayoutDashboard', label: 'Главная страница', desc: 'Редактировать hero и статистику' },
+                    { icon: 'Gamepad2', label: 'Магазин игр', desc: 'Добавить / удалить игры' },
+                    { icon: 'Users', label: 'Пользователи', desc: 'Управление аккаунтами' },
+                    { icon: 'ToggleRight', label: 'Доступы', desc: 'Включить функции для аккаунтов' },
+                  ].map((item) => (
+                    <div key={item.label} className="group glass rounded-xl p-4 hover:border-accent/40 transition-all cursor-pointer hover:-translate-y-0.5">
+                      <div className="flex items-start gap-3">
+                        <div className="w-9 h-9 rounded-lg bg-gradient-to-br from-accent to-primary flex items-center justify-center shrink-0">
+                          <Icon name={item.icon} size={18} className="text-white" />
+                        </div>
+                        <div>
+                          <p className="font-medium text-sm">{item.label}</p>
+                          <p className="text-xs text-muted-foreground mt-0.5">{item.desc}</p>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              <div className="glass rounded-2xl p-6">
+                <h3 className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-4">Статус сайта</h3>
+                <div className="flex items-center gap-3">
+                  <span className="w-2.5 h-2.5 rounded-full bg-green-400 animate-pulse" />
+                  <span className="text-sm">Сайт работает в штатном режиме</span>
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+    );
+  }
+
+  // ────────────────────────────── HOME PAGE ──────────────────────────────
   return (
     <div className="min-h-screen bg-background overflow-x-hidden grain">
 
@@ -109,16 +249,12 @@ export default function Index() {
             <a href="#join" className="hover:text-foreground transition-colors">Стать частью</a>
           </div>
           {user ? (
-            <div className="flex items-center gap-3">
-              <span className="text-sm text-muted-foreground hidden md:block">
-                <span className="text-primary font-medium">{user.username}</span>
-              </span>
-              <Button variant="ghost" size="sm" className="rounded-full" onClick={() => setUser(null)}>
-                <Icon name="LogOut" size={16} />
-              </Button>
-            </div>
+            <Button onClick={() => setPage('account')} className="rounded-full bg-primary hover:bg-primary/90 font-medium">
+              <Icon name="User" size={16} className="mr-1.5" />
+              {user.username}
+            </Button>
           ) : (
-            <Button onClick={openModal} className="rounded-full bg-primary hover:bg-primary/90 font-medium">
+            <Button onClick={openAuthModal} className="rounded-full bg-primary hover:bg-primary/90 font-medium">
               <Icon name="LogIn" size={16} className="mr-1.5" />
               Аккаунт
             </Button>
@@ -126,56 +262,38 @@ export default function Index() {
         </nav>
       </header>
 
-      {/* MODAL */}
-      {modal && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4" onClick={closeModal}>
+      {/* AUTH MODAL */}
+      {authModal && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4" onClick={closeAuthModal}>
           <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" />
-          <div
-            className="relative glass rounded-2xl w-full max-w-md p-8 animate-fade-in"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <button onClick={closeModal} className="absolute top-4 right-4 text-muted-foreground hover:text-foreground">
+          <div className="relative glass rounded-2xl w-full max-w-md p-8 animate-fade-in" onClick={(e) => e.stopPropagation()}>
+            <button onClick={closeAuthModal} className="absolute top-4 right-4 text-muted-foreground hover:text-foreground">
               <Icon name="X" size={20} />
             </button>
 
             <div className="flex rounded-xl bg-secondary/50 p-1 mb-6">
-              <button
-                onClick={() => { setTab('register'); setRegErr(''); }}
-                className={`flex-1 py-2 rounded-lg text-sm font-medium transition-all ${tab === 'register' ? 'bg-primary text-white' : 'text-muted-foreground hover:text-foreground'}`}
-              >
+              <button onClick={() => { setAuthTab('register'); setRegErr(''); }}
+                className={`flex-1 py-2 rounded-lg text-sm font-medium transition-all ${authTab === 'register' ? 'bg-primary text-white' : 'text-muted-foreground hover:text-foreground'}`}>
                 Регистрация
               </button>
-              <button
-                onClick={() => { setTab('login'); setLoginErr(''); }}
-                className={`flex-1 py-2 rounded-lg text-sm font-medium transition-all ${tab === 'login' ? 'bg-primary text-white' : 'text-muted-foreground hover:text-foreground'}`}
-              >
+              <button onClick={() => { setAuthTab('login'); setLoginErr(''); }}
+                className={`flex-1 py-2 rounded-lg text-sm font-medium transition-all ${authTab === 'login' ? 'bg-primary text-white' : 'text-muted-foreground hover:text-foreground'}`}>
                 Вход
               </button>
             </div>
 
-            {tab === 'register' ? (
+            {authTab === 'register' ? (
               <div className="space-y-4">
                 <h3 className="font-display font-600 text-xl mb-2">Создать аккаунт</h3>
                 <div className="space-y-2">
                   <Label>Имя пользователя</Label>
-                  <Input
-                    placeholder="Александра"
-                    value={regName}
-                    onChange={(e) => setRegName(e.target.value)}
-                    onKeyDown={(e) => e.key === 'Enter' && handleRegister()}
-                    className="h-11 bg-secondary/50 border-border rounded-xl"
-                  />
+                  <Input placeholder="Александра" value={regName} onChange={(e) => setRegName(e.target.value)}
+                    onKeyDown={(e) => e.key === 'Enter' && handleRegister()} className="h-11 bg-secondary/50 border-border rounded-xl" />
                 </div>
                 <div className="space-y-2">
                   <Label>Пароль</Label>
-                  <Input
-                    type="password"
-                    placeholder="••••••••"
-                    value={regPass}
-                    onChange={(e) => setRegPass(e.target.value)}
-                    onKeyDown={(e) => e.key === 'Enter' && handleRegister()}
-                    className="h-11 bg-secondary/50 border-border rounded-xl"
-                  />
+                  <Input type="password" placeholder="••••••••" value={regPass} onChange={(e) => setRegPass(e.target.value)}
+                    onKeyDown={(e) => e.key === 'Enter' && handleRegister()} className="h-11 bg-secondary/50 border-border rounded-xl" />
                 </div>
                 {regErr && <p className="text-sm text-destructive">{regErr}</p>}
                 <Button onClick={handleRegister} disabled={loading} className="w-full h-12 rounded-xl bg-primary hover:bg-primary/90 font-medium">
@@ -183,7 +301,7 @@ export default function Index() {
                 </Button>
                 <p className="text-xs text-center text-muted-foreground">
                   Уже есть аккаунт?{' '}
-                  <button onClick={() => setTab('login')} className="text-primary hover:underline">Войти</button>
+                  <button onClick={() => setAuthTab('login')} className="text-primary hover:underline">Войти</button>
                 </p>
               </div>
             ) : (
@@ -191,24 +309,13 @@ export default function Index() {
                 <h3 className="font-display font-600 text-xl mb-2">Добро пожаловать</h3>
                 <div className="space-y-2">
                   <Label>Имя пользователя</Label>
-                  <Input
-                    placeholder="DezeYT"
-                    value={loginName}
-                    onChange={(e) => setLoginName(e.target.value)}
-                    onKeyDown={(e) => e.key === 'Enter' && handleLogin()}
-                    className="h-11 bg-secondary/50 border-border rounded-xl"
-                  />
+                  <Input placeholder="DezeYT" value={loginName} onChange={(e) => setLoginName(e.target.value)}
+                    onKeyDown={(e) => e.key === 'Enter' && handleLogin()} className="h-11 bg-secondary/50 border-border rounded-xl" />
                 </div>
                 <div className="space-y-2">
                   <Label>Пароль</Label>
-                  <Input
-                    type="password"
-                    placeholder="••••••••"
-                    value={loginPass}
-                    onChange={(e) => setLoginPass(e.target.value)}
-                    onKeyDown={(e) => e.key === 'Enter' && handleLogin()}
-                    className="h-11 bg-secondary/50 border-border rounded-xl"
-                  />
+                  <Input type="password" placeholder="••••••••" value={loginPass} onChange={(e) => setLoginPass(e.target.value)}
+                    onKeyDown={(e) => e.key === 'Enter' && handleLogin()} className="h-11 bg-secondary/50 border-border rounded-xl" />
                 </div>
                 {loginErr && <p className="text-sm text-destructive">{loginErr}</p>}
                 <Button onClick={handleLogin} disabled={loading} className="w-full h-12 rounded-xl bg-primary hover:bg-primary/90 font-medium">
@@ -216,7 +323,7 @@ export default function Index() {
                 </Button>
                 <p className="text-xs text-center text-muted-foreground">
                   Нет аккаунта?{' '}
-                  <button onClick={() => setTab('register')} className="text-primary hover:underline">Зарегистрироваться</button>
+                  <button onClick={() => setAuthTab('register')} className="text-primary hover:underline">Зарегистрироваться</button>
                 </p>
               </div>
             )}
@@ -237,7 +344,8 @@ export default function Index() {
             Sem — команда инженеров, дизайнеров и мечтателей, которые строят технологии, меняющие правила игры.
           </p>
           <div className="flex flex-wrap gap-4 justify-center animate-fade-in" style={{ animationDelay: '0.2s' }}>
-            <Button size="lg" variant="outline" className="rounded-full px-8 border-border bg-transparent hover:bg-secondary font-medium" onClick={() => document.getElementById('about')?.scrollIntoView({ behavior: 'smooth' })}>
+            <Button size="lg" variant="outline" className="rounded-full px-8 border-border bg-transparent hover:bg-secondary font-medium"
+              onClick={() => document.getElementById('about')?.scrollIntoView({ behavior: 'smooth' })}>
               О компании
             </Button>
           </div>
@@ -280,7 +388,7 @@ export default function Index() {
         </div>
       </section>
 
-      {/* SHOP — только для аккаунтов с shop_enabled */}
+      {/* SHOP */}
       {user?.shopEnabled && (
         <section id="shop" className="container py-24">
           <div className="text-center max-w-2xl mx-auto mb-12">
@@ -295,18 +403,14 @@ export default function Index() {
               <div key={i} className="group glass rounded-2xl overflow-hidden hover:border-primary/40 transition-all hover:-translate-y-1">
                 <div className={`h-36 bg-gradient-to-br ${g.color} flex items-center justify-center relative`}>
                   <Icon name="Gamepad2" size={48} className="text-white/80" />
-                  <span className="absolute top-3 right-3 text-xs font-medium bg-black/30 text-white rounded-full px-2.5 py-1">
-                    {g.badge}
-                  </span>
+                  <span className="absolute top-3 right-3 text-xs font-medium bg-black/30 text-white rounded-full px-2.5 py-1">{g.badge}</span>
                 </div>
                 <div className="p-5">
                   <p className="text-xs text-muted-foreground mb-1">{g.genre}</p>
                   <h3 className="font-display font-600 text-base mb-3">{g.title}</h3>
                   <div className="flex items-center justify-between">
                     <span className="font-bold text-primary">{g.price}</span>
-                    <Button size="sm" className="rounded-lg bg-primary hover:bg-primary/90 text-xs h-8">
-                      Купить
-                    </Button>
+                    <Button size="sm" className="rounded-lg bg-primary hover:bg-primary/90 text-xs h-8">Купить</Button>
                   </div>
                 </div>
               </div>
@@ -339,18 +443,22 @@ export default function Index() {
                 ))}
               </ul>
             </div>
-            <div className="flex flex-col items-center justify-center gap-4">
+            <div className="flex flex-col items-center justify-center">
               {user ? (
                 <div className="text-center glass rounded-2xl p-8 w-full">
                   <Icon name="CheckCircle" size={48} className="mx-auto mb-4 text-primary" />
                   <h3 className="font-display font-600 text-xl mb-2">Вы уже в команде!</h3>
-                  <p className="text-muted-foreground text-sm">Добро пожаловать, <span className="text-primary font-medium">{user.username}</span></p>
+                  <p className="text-muted-foreground text-sm mb-4">Добро пожаловать, <span className="text-primary font-medium">{user.username}</span></p>
+                  <Button onClick={() => setPage('account')} className="rounded-xl bg-primary hover:bg-primary/90">
+                    Перейти в кабинет
+                    <Icon name="ArrowRight" size={16} className="ml-1.5" />
+                  </Button>
                 </div>
               ) : (
                 <div className="glass rounded-2xl p-8 w-full text-center">
                   <Icon name="UserPlus" size={48} className="mx-auto mb-4 text-primary" />
                   <h3 className="font-display font-600 text-xl mb-4">Присоединяйся к Sem</h3>
-                  <Button onClick={openModal} className="w-full h-12 rounded-xl bg-primary hover:bg-primary/90 font-medium">
+                  <Button onClick={openAuthModal} className="w-full h-12 rounded-xl bg-primary hover:bg-primary/90 font-medium">
                     Создать аккаунт
                     <Icon name="Sparkles" size={16} className="ml-1.5" />
                   </Button>
