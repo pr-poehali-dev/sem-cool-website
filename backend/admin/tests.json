@@ -1,0 +1,23 @@
+{
+  "tests": [
+    {
+      "name": "List users as admin",
+      "method": "POST",
+      "path": "/",
+      "headers": { "X-Admin-User": "DezeYT" },
+      "body": { "action": "list" },
+      "expectedStatus": 200,
+      "expectedBody": { "users": [] },
+      "bodyMatcher": "partial"
+    },
+    {
+      "name": "Reject non-admin",
+      "method": "POST",
+      "path": "/",
+      "headers": { "X-Admin-User": "hacker" },
+      "body": { "action": "list" },
+      "expectedStatus": 403,
+      "bodyMatcher": "partial"
+    }
+  ]
+}
