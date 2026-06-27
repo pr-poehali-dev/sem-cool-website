@@ -71,7 +71,6 @@ const Index = () => {
           </a>
           <div className="hidden md:flex items-center gap-8 text-sm text-muted-foreground">
             <a href="#about" className="hover:text-foreground transition-colors">О компании</a>
-            <a href="#vacancies" className="hover:text-foreground transition-colors">Вакансии</a>
             <a href="#join" className="hover:text-foreground transition-colors">Стать частью</a>
           </div>
           <Button className="rounded-full bg-primary hover:bg-primary/90 font-medium">
